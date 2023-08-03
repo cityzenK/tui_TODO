@@ -4,13 +4,17 @@ use crossterm::{
     terminal::{enable_raw_mode, disable_raw_mode}
 };
 use tui::{
-    backend::CrosstermBackend, Terminal
+    backend::CrosstermBackend, 
+    Terminal, 
+    layout::{self, Layout, Direction, Constraint, Alignment},
+    widgets::{Paragraph, Block, Borders, BorderType}, 
+    style::{Color, Style}
 };
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
 use std::{
     time::{Duration, Instant}, 
-    thread
+    thread, slice::Chunks
 };
 use std::io;
 use std::sync::mpsc;
@@ -83,6 +87,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
+
+
+    loop {
+        terminal.draw(|rect| {
+            let size = rect.size();
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(2)
+                .constraints(
+                    [
+                        Constraint::Length(3),
+                        Constraint::Min(2),
+                        Constraint::Length(3)
+                    ]
+                    .as_ref(),
+                ).split(size);
+
+            let footer = Paragraph::new("This is the footer of the App")
+                .style(Style::default().fg(Color::LightGreen))
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                    .borders(Borders::ALL)
+                    .style(Style::default().fg(Color::White))
+                    .title("FOOTER")
+                    .border_type(BorderType::Plain),
+                );
+            rect.render_widget(footer, chunks[2]);
+        });
+
+    }
 
     Ok(())
 }
