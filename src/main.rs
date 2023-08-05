@@ -7,8 +7,9 @@ use tui::{
     backend::CrosstermBackend, 
     Terminal, 
     layout::{self, Layout, Direction, Constraint, Alignment},
-    widgets::{Paragraph, Block, Borders, BorderType}, 
-    style::{Color, Style}
+    widgets::{Paragraph, Block, Borders, BorderType, Tabs}, 
+    style::{Color, Style, self, Modifier}, 
+    text::{Spans, Span}
 };
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
@@ -48,9 +49,20 @@ enum Event<I>{
 }
 
 //Principal menu
+#[derive(Copy, Clone, Debug)]
 enum Menu{
     Home,
     Task,
+}
+
+impl From<Menu> for usize {
+    // add code here
+    fn from(input: Menu) -> usize{
+        match input {
+            Menu::Home => 0,
+            Menu::Task => 1,
+        }
+    }
 }
 
 
@@ -89,6 +101,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     terminal.clear()?;
 
 
+    let menu_titles = vec!["HOME", "TASK", "ADD", "DELETE", "QUIT"];
+    let mut activate_menu_item = Menu::Home;
+
+
     loop {
         terminal.draw(|rect| {
             let size = rect.size();
@@ -115,6 +131,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
                     .border_type(BorderType::Plain),
                 );
             rect.render_widget(footer, chunks[2]);
+
+            let menu: Vec<_> = menu_titles
+                .iter()
+                .map(|t| {
+                    let (first, rest) = t.split_at(1);
+                    Spans::from(vec![
+                                Span::styled(
+                                    first,
+                                    Style::default()
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::UNDERLINED),
+                                    ),
+                                    Span::styled(rest, Style::default().fg(Color::White)),
+                    ])
+                })
+            .collect();
+
+            let tabs = Tabs::new(menu)
+                .select(activate_menu_item.into())
+                .block(Block::default().title("Menu").borders(Borders::ALL))
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().fg(Color::Yellow))
+                .divider(Span::raw("|"));
+
+            rect.render_widget(tabs, chunks[0]);
         });
 
     }
