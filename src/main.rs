@@ -197,6 +197,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
                 }
                 KeyCode::Char('h') => active_menu_item = Menu::Home,
                 KeyCode::Char('t') => active_menu_item = Menu::Task,
+                KeyCode::Char('a') => {
+                    add_random_data().expect("can add new random task");
+                }
+                KeyCode::Char('d') => {
+                    remove_task_in_index(&mut task_list_state).expect("can remove a task");
+                }
+                KeyCode::Char('j') => {
+                    if let Some(selected) = task_list_state.selected(){
+                        let amount_task = read_db().expect("can fetch task list").len();
+                        if selected >= amount_task -  1{
+                            task_list_state.select(Some(0));
+                        }else {
+                            task_list_state.select(Some(selected + 1));
+                        }
+                    }
+                }
+                KeyCode::Char('k') => {
+                    if let Some(selected) = task_list_state.selected(){
+                        let amount_task = read_db().expect("can fetch task list").len();
+                        if selected > 0 {
+                            task_list_state.select(Some(selected - 1));
+                        }else {
+                            task_list_state.select(Some(amount_task - 1));
+                        }
+                    }
+                }
                 _ => {}
             },
             Event::Tick => {}
@@ -243,6 +269,18 @@ fn add_random_data() -> Result<Vec<Task>, Error>{
     Ok(parse)
 }
 
+fn remove_task_in_index(task_list_state: &mut ListState) ->Result<(), Error>{
+    if let Some(selected) = task_list_state.selected(){
+        let db_content = fs::read_to_string(DB_PATH)?;
+        let mut parsed: Vec<Task> = serde_json::from_str(&db_content)?;
+        parsed.remove(selected);
+        fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
+        task_list_state.select(Some(selected - 1));
+    }
+
+    Ok(())
+}
+
 fn render_home<'a>() -> Paragraph<'a>{
     let home = Paragraph::new(vec![
         Spans::from(vec![Span::raw("")]),
@@ -256,6 +294,7 @@ fn render_home<'a>() -> Paragraph<'a>{
                 )]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw("Press t to access tasks, 'a' to add a random new task and 'd' to delete the currently selected task")]),
+        Spans::from(vec![Span::raw("'k' to move up to a list and 'j' to move down to a list.")]),
     ])
     .alignment(Alignment::Center)
     .block(
