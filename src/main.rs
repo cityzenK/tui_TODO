@@ -1,9 +1,10 @@
-use chrono::{prelude::*, format::Parsed};
+use chrono::prelude::*;
 use crossterm::{
-    event::{self, Event as CEvent, KeyCode, DisableMouseCapture, EnableMouseCapture},
+    event::{self, Event as CEvent, KeyCode, DisableMouseCapture, EnableMouseCapture, KeyEvent, KeyEventKind},
     terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     execute
 };
+use rand::{Rng, distributions::Alphanumeric};
 use tui::{
     backend::CrosstermBackend, 
     Terminal, 
@@ -16,7 +17,7 @@ use serde::{Serialize, Deserialize};
 use thiserror::Error;
 use std::{
     time::{Duration, Instant}, 
-    thread, slice::Chunks, fs, collections::vec_deque
+    thread, slice::Chunks, fs, collections::vec_deque, vec
 };
 use std::io;
 use std::sync::mpsc;
@@ -30,6 +31,7 @@ struct Task{
     id: usize,
     task: String,
     category: String,
+    state: String,
     created_at: DateTime<Utc>,
 
 }
@@ -84,9 +86,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| Duration ::from_secs(0));
 
-            if(event::poll(timeout).expect("poll works here")){
-                if let CEvent::Key(key) = event::read().expect("can read events"){
-                    tx.send(Event::Input(key)).expect("can send events");
+            if event::poll(timeout).expect("poll works here") {
+                if let CEvent::Key(KeyEvent { 
+                                            code, 
+                                            kind: KeyEventKind::Press,
+                                            ..
+                                             }) = event::read().expect("can read events"){
+                    tx.send(Event::Input(code)).expect("can send events");
                 }
             }
 
@@ -183,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
 
 
         match rx.recv()?{
-            Event::Input(event) => match event.code{
+            Event::Input(code) => match code{
                 KeyCode::Char('q') => {
                     disable_raw_mode()?;
                     terminal.show_cursor()?;
@@ -208,6 +214,33 @@ fn read_db() -> Result<Vec<Task>, Error>{
     let parsed: Vec<Task> = serde_json::from_str(&db_content)?;
 
     Ok(parsed)
+}
+
+fn add_random_data() -> Result<Vec<Task>, Error>{
+    let mut rng = rand::thread_rng();
+    let db_content = fs::read_to_string(DB_PATH)?;
+    let mut parse:  Vec<Task> = serde_json::from_str(&db_content)?;
+
+    let worklife = match rng.gen_range(0, 1) {
+        0 => "Work",
+        _ => "Life",
+    };
+    let randomstate = match rng.gen_range(0, 1) {
+        0 => "Complete",
+        _ => "Incomplete",
+    };
+
+    let random_task = Task {
+        id: rng.gen_range(0, 9999999),
+        task: rng.sample_iter(Alphanumeric).take(10).collect(),
+        category: worklife.to_owned(),
+        state: randomstate.to_owned(),
+        created_at: Utc::now(),
+    };
+
+    parse.push(random_task);
+    fs::write(DB_PATH, &serde_json::to_vec(&parse)?)?;
+    Ok(parse)
 }
 
 fn render_home<'a>() -> Paragraph<'a>{
@@ -273,6 +306,7 @@ fn render_task<'a>(task_list_state: &ListState) -> (List<'a>, Table<'a>){
         Cell::from(Span::raw(select_task.id.to_string())),
         Cell::from(Span::raw(select_task.task)),
         Cell::from(Span::raw(select_task.category)),
+        Cell::from(Span::raw(select_task.state)),
         Cell::from(Span::raw(select_task.created_at.to_string())),
     ])])
     .header(Row::new(vec![
@@ -286,6 +320,10 @@ fn render_task<'a>(task_list_state: &ListState) -> (List<'a>, Table<'a>){
         )),
         Cell::from(Span::styled(
                 "CATEGORY", 
+                Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Cell::from(Span::styled(
+                "STATE", 
                 Style::default().add_modifier(Modifier::BOLD),
         )),
         Cell::from(Span::styled(
@@ -303,7 +341,8 @@ fn render_task<'a>(task_list_state: &ListState) -> (List<'a>, Table<'a>){
     .widths(&[
         Constraint::Percentage(5),
         Constraint::Percentage(20),
-        Constraint::Percentage(20),
+        Constraint::Percentage(10),
+        Constraint::Percentage(10),
         Constraint::Percentage(5),
         Constraint::Percentage(20),
     ]);
